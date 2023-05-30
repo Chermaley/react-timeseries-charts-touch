@@ -122,9 +122,9 @@ export default class ChartContainer extends React.Component {
 
     handlePanZoomEnd() {
         if (this.props.onPanZoomEnd) {
-          this.props.onPanZoomEnd();
+            this.props.onPanZoomEnd();
         }
-      }
+    }
 
     /**
      * Within the charts library the time range of the x axis is kept as a begin
@@ -760,7 +760,7 @@ ChartContainer.propTypes = {
      * to save expensive tasks until after panning is complete rather than doing
      * them syncronously whilst panning.
      */
-    onPanZoomEnd: React.PropTypes.func,
+    onPanZoomEnd: PropTypes.func,
 
     /**
      * Called when the user context-clicks the chart
