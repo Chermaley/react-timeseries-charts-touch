@@ -300,39 +300,155 @@ export default class EventHandler extends React.Component {
             onMouseOut: this.handleMouseOut,
             onMouseUp: this.handleMouseUp,
 
-            onTouchStart: e => {},
+            onTouchStart: e => {
+                if (e.touches.length === 2) {
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    const touchDistance = Math.hypot(
+                        touch1.pageX - touch2.pageX,
+                        touch1.pageY - touch2.pageY
+                    );
+
+                    this.setState({
+                        touchDistance
+                    });
+                } else {
+                    const touch = e.touches[0];
+                    if (!touch) return;
+
+                    const x = touch.pageX;
+                    const y = touch.pageY;
+
+                    const mockMouseEvent = {
+                        preventDefault: () => {},
+                        pageX: x,
+                        pageY: y
+                    };
+
+                    const xy0 = [Math.round(x), Math.round(y)];
+
+                    const begin = this.props.scale.domain()[0].getTime();
+                    const end = this.props.scale.domain()[1].getTime();
+
+                    if (!this.state.isPanning) {
+                        this.setState({
+                            isPanning: true,
+                            initialPanBegin: begin,
+                            initialPanEnd: end,
+                            initialPanPosition: xy0
+                        });
+                    }
+
+                    this.handleMouseMove(mockMouseEvent);
+                }
+            },
 
             onTouchMove: e => {
-                let touch = e.targetTouches[0];
-                if (!touch) return;
+                if (e.touches.length === 2 && this.state.touchDistance !== null) {
+                    const touch1 = e.touches[0];
+                    const touch2 = e.touches[1];
+                    const touchDistance = Math.hypot(
+                        touch1.pageX - touch2.pageX,
+                        touch1.pageY - touch2.pageY
+                    );
 
-                const x = touch.pageX;
-                const y = touch.pageY;
+                    const SCALE_FACTOR = 0.001;
+                    let scale = 1 - (touchDistance - this.state.touchDistance) * SCALE_FACTOR;
+                    if (scale > 3) {
+                        scale = 3;
+                    }
+                    if (scale < 0.1) {
+                        scale = 0.1;
+                    }
 
-                const mockMouseEvent = {
-                    preventDefault: () => {},
-                    pageX: x,
-                    pageY: y
-                };
+                    const xy = this.getOffsetMousePosition(touch1);
 
-                const xy0 = [Math.round(x), Math.round(y)];
+                    const begin = this.props.scale.domain()[0].getTime();
+                    const end = this.props.scale.domain()[1].getTime();
+                    const center = this.props.scale.invert(xy[0]).getTime();
 
-                const begin = this.props.scale.domain()[0].getTime();
-                const end = this.props.scale.domain()[1].getTime();
+                    let beginScaled = center - parseInt((center - begin) * scale, 10);
+                    let endScaled = center + parseInt((end - center) * scale, 10);
 
-                if (!this.state.isPanning) {
+                    // Duration constraint
+                    let duration = (end - begin) * scale;
+
+                    if (this.props.minDuration) {
+                        const minDuration = parseInt(this.props.minDuration, 10);
+                        if (duration < this.props.minDuration) {
+                            beginScaled = center - ((center - begin) / (end - begin)) * minDuration;
+                            endScaled = center + ((end - center) / (end - begin)) * minDuration;
+                        }
+                    }
+
+                    if (this.props.minTime && this.props.maxTime) {
+                        const maxDuration =
+                            this.props.maxTime.getTime() - this.props.minTime.getTime();
+                        if (duration > maxDuration) {
+                            duration = maxDuration;
+                        }
+                    }
+
+                    // Range constraint
+                    if (this.props.minTime && beginScaled < this.props.minTime.getTime()) {
+                        beginScaled = this.props.minTime.getTime();
+                        endScaled = beginScaled + duration;
+                    }
+
+                    if (this.props.maxTime && endScaled > this.props.maxTime.getTime()) {
+                        endScaled = this.props.maxTime.getTime();
+                        beginScaled = endScaled - duration;
+                    }
+
+                    const newBegin = new Date(beginScaled);
+                    const newEnd = new Date(endScaled);
+
+                    const newTimeRange = new TimeRange(newBegin, newEnd);
+
+                    if (this.props.onZoom) {
+                        this.props.onZoom(newTimeRange);
+                    }
+
                     this.setState({
-                        isPanning: true,
-                        initialPanBegin: begin,
-                        initialPanEnd: end,
-                        initialPanPosition: xy0
+                        touchDistance
                     });
-                }
+                } else {
+                    let touch = e.targetTouches[0];
+                    if (!touch) return;
 
-                this.handleMouseMove(mockMouseEvent);
+                    const x = touch.pageX;
+                    const y = touch.pageY;
+
+                    const mockMouseEvent = {
+                        preventDefault: () => {},
+                        pageX: x,
+                        pageY: y
+                    };
+
+                    const xy0 = [Math.round(x), Math.round(y)];
+
+                    const begin = this.props.scale.domain()[0].getTime();
+                    const end = this.props.scale.domain()[1].getTime();
+
+                    if (!this.state.isPanning) {
+                        this.setState({
+                            isPanning: true,
+                            initialPanBegin: begin,
+                            initialPanEnd: end,
+                            initialPanPosition: xy0
+                        });
+                    }
+
+                    this.handleMouseMove(mockMouseEvent);
+                }
             },
 
             onTouchEnd: e => {
+                if (e.touches.length < 2) {
+                    this.setState({
+                        touchDistance: null
+                    });
+                }
                 if (this.state.isPanning) {
                     this.setState({
                         isPanning: false,
